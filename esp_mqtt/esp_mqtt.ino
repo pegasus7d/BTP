@@ -1,147 +1,167 @@
-#include <WiFi.h>
-#include <PubSubClient.h>
 
-// Wi-Fi credentials
-const char* ssid = "Different";         // Replace with your SSID
-const char* password = "champion";      // Replace with your Wi-Fi password
+// //THIS EXAMPLE SHOWS HOW VVM501 ESP32 4G LTE MODULE CAN CONNECT TO MQTT PUBLIC BROKER HIVEMQ USING TINYGSMCLIENT AND PUBSUBCLIENT LIBRARY
+// //THE DEVICE CAN PUBLISH AS WELL AS SUBSCRIBE TOPICS VIA 4G MQTT
+// //FOR VVM501 PRODUCT DETAILS VISIT www.vv-mobility.com
 
-// MQTT broker IP address
-const char* mqttServer = "192.168.149.222"; // Replace with your MQTT broker IP address
-const int mqttPort = 1883; // Default MQTT port, adjust if necessary
+// #define TINY_GSM_MODEM_SIM7600  // SIM7600 AT instruction is compatible with A7670
+// #define SerialAT Serial1
+// #define SerialMon Serial
+// #define TINY_GSM_USE_GPRS true
+// #include <TinyGsmClient.h>
+// #define RXD2 17    //VVM501 MODULE RXD INTERNALLY CONNECTED
+// #define TXD2 16    //VVM501 MODULE TXD INTERNALLY CONNECTED
+// #define powerPin 4 ////VVM501 MODULE ESP32 PIN D4 CONNECTED TO POWER PIN OF A7670C CHIPSET, INTERNALLY CONNECTED
 
-// Initialize PubSubClient with the Ethernet client
-WiFiClient wifiClient;
-PubSubClient client(wifiClient);
+// char a, b;
 
-// MQTT topics
-const char* publishTopic = "sensor/reading";    // Topic to publish messages
-const char* subscribeTopic = "device/time_update"; // Topic to subscribe to for receiving time
 
-// Variable for the interval duration (in milliseconds)
-unsigned long interval = 2000; // Default to 2 seconds
 
-// Variable to store the last time a message was published
-unsigned long previousMillis = 0;
+// const char apn[]      = ""; //APN automatically detects for 4G SIM, NO NEED TO ENTER, KEEP IT BLANK
 
+// #ifdef DUMP_AT_COMMANDS
+// #include <StreamDebugger.h>
+// StreamDebugger debugger(SerialAT, SerialMon);
+// TinyGsm        modem(debugger);
+// #else
+// TinyGsm        modem(SerialAT);
+// #endif
+// TinyGsmClient client(modem);
+
+
+// void setup()
+// {
+//   Serial.begin(115200);
+
+//   pinMode(powerPin, OUTPUT);
+//   digitalWrite(powerPin, LOW);
+//   delay(100);
+//   digitalWrite(powerPin, HIGH);
+//   delay(1000);
+//   digitalWrite(powerPin, LOW);
+
+
+
+
+//   Serial.println("\nconfiguring VVM501 Module. Kindly wait");
+
+//   delay(10000);
+
+//   SerialAT.begin(115200, SERIAL_8N1, RXD2, TXD2);
+
+
+//   // Restart takes quite some time
+//   // To skip it, call init() instead of restart()
+//   DBG("Initializing modem...");
+//   if (!modem.init()) {
+//     DBG("Failed to restart modem, delaying 10s and retrying");
+//     return;
+//   }
+//   // Restart takes quite some time
+//   // To skip it, call init() instead of restart()
+//   DBG("Initializing modem...");
+//   if (!modem.restart()) {
+//     DBG("Failed to restart modem, delaying 10s and retrying");
+//     return;
+//   }
+
+//   String name = modem.getModemName();
+//   DBG("Modem Name:", name);
+
+//   String modemInfo = modem.getModemInfo();
+//   DBG("Modem Info:", modemInfo);
+
+
+//   Serial.println("Waiting for network...");
+//   if (!modem.waitForNetwork()) {
+//     Serial.println(" fail");
+//     delay(10000);
+//     return;
+//   }
+//   Serial.println(" success");
+
+//   if (modem.isNetworkConnected()) {
+//     Serial.println("Network connected");
+//   }
+
+
+//   // GPRS connection parameters are usually set after network registration
+//   Serial.print(F("Connecting to "));
+//   Serial.print(apn);
+//   if (!modem.gprsConnect(apn)) {
+//     Serial.println(" fail");
+//     delay(10000);
+//     return;
+//   }
+//   Serial.println(" success");
+
+//   if (modem.isGprsConnected()) {
+//     Serial.println("LTE module connected");
+//   }
+
+//   Serial.println("Enter Standard AT commands like AT, AT+CPIN?, AT+CCLK?, etc.");
+//   Serial.println("SELECT SERIAL PORT MONITOR AS \"BOTH NL & CR\" TO VIEW COMMAND RESPONSE CORRECTLY IF YOU ARE USING ARDUINO IDE");
+//   Serial.println("Refer A7600 series datasheet for entire list of commands");
+//   Serial.println("Understand the AT Commands properly");
+//   Serial.println("Incorrect AT commands can corrupt the 4G module memory!!!");
+
+
+//   // MQTT Broker setup
+//   //mqtt.setServer(broker, 1883);
+//   //mqtt.setCallback(callback);
+// }
+
+
+
+// void loop()
+// {
+//   if (Serial.available() > 0) // read AT commands from user Serial port and send to the Module
+//   {
+//     a = Serial.read();
+//     SerialAT.write(a);
+//   }
+//   if (SerialAT.available() > 0) //read Response commands from module and send to user Serial Port
+//   {
+//     b = SerialAT.read();
+//     Serial.write(b);
+//   }
+// }
 void setup() {
-  // Start serial communication at 115200 baud
-  Serial.begin(115200);
-
-  // Connect to Wi-Fi
-  setup_wifi();
-
-  // Set MQTT server and port
-  client.setServer(mqttServer, mqttPort);
-  
-  // Set the callback function for incoming messages
-  client.setCallback(callback);
-
-  // Connect to the MQTT broker
-  if (connectToMQTT()) {
-    Serial.println("Connected to MQTT broker!");
-    // Subscribe to the time update topic
-    client.subscribe(subscribeTopic);
-    Serial.println("Subscribed to time update topic.");
-  } else {
-    Serial.println("Failed to connect to MQTT broker.");
-  }
+  Serial.begin(115200); // Initialize Serial Monitor
+  Serial2.begin(115200, SERIAL_8N1, 25, 26); // Initialize hardware Serial for ESP32 communication
+  Serial.setTimeout(1000); // Set a timeout for Serial input
+  Serial.print("Start");
 }
 
 void loop() {
-  // Reconnect if the connection is lost
-  if (!client.connected()) {
-    if (connectToMQTT()) {
-      Serial.println("Reconnected to MQTT broker!");
-      // Re-subscribe to the time update topic
-      client.subscribe(subscribeTopic);
-    } else {
-      Serial.println("Failed to reconnect to MQTT broker.");
-    }
-  }
-  
-  client.loop(); // Handle incoming messages
-
-  unsigned long currentMillis = millis();
-
-  // Check if the interval has passed
-  if (currentMillis - previousMillis >= interval) {
-    // Save the last publish time
-    previousMillis = currentMillis;
-
-    // Publish a message to the MQTT topic
-    static int counter = 0;
-    counter++;
-
-    // Get Wi-Fi connection status
-    String wifiStatus = WiFi.isConnected() ? "Connected" : "Disconnected";
-    
-    // Create message with counter, Wi-Fi status, and IP address
-    String message = "Hello from ESP32! Counter: " + String(counter) + 
-                     ", Wi-Fi Status: " + wifiStatus +
-                     ", IP: " + WiFi.localIP().toString();
-
-    // Print the message to the Serial Monitor
-    Serial.println(message);
-    Serial.println(message.length());
-
-    // Publish the message to the MQTT topic
-    bool success = client.publish(publishTopic, message.c_str());
-    Serial.println(success ? "Message published successfully!" : "Failed to publish message.");
+  // Check if any data is available on Serial Monitor
+  if (Serial.available() > 0) {
+    // Read the input from Serial Monitor
+    String input = Serial.readStringUntil('\n');
+    // Send the input to Serial2
+    Serial2.println(input);
+    // Wait for ESP32 to respond
+    delay(1000); // Adjust delay according to response time
+    // Print the response from ESP32 to Serial Monitor
+    waitForResponse();
   }
 }
 
-// Callback function for incoming messages
-void callback(char* topic, byte* payload, unsigned int length) {
-  // Check if the received message is from the subscribed time update topic
-  if (strcmp(topic, subscribeTopic) == 0) {
-    Serial.print("Received time update: ");
-    String receivedTime;
-    for (unsigned int i = 0; i < length; i++) {
-      receivedTime += (char)payload[i];
-    }
-    Serial.println(receivedTime);
-
-    // Convert the received time to a long integer if needed
-    long timeValue = receivedTime.toInt();
-    Serial.print("Time as integer: ");
-    Serial.println(timeValue*1000);
-
-
-    // Update the interval duration using the received time value
-    interval = timeValue * 1000;  // Convert seconds to milliseconds
-    Serial.print("Updated interval: ");
-    Serial.println(interval);
+void waitForResponse() {
+  // Wait for response from ESP32
+  unsigned long timeout = millis() + 10000; // Timeout after 10 seconds
+  while (!Serial2.available() && millis() < timeout) {
+    // Wait for data to be available or timeout
+  }
+  // Print the response from ESP32 to Serial Monitor
+  while (Serial2.available()) {
+    Serial.write(Serial2.read());
   }
 }
 
-void setup_wifi() {
-  // Connect to the Wi-Fi network
-  delay(10);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println();
-  Serial.println("Wi-Fi connected!");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-}
-
-bool connectToMQTT() {
-  Serial.print("Connecting to MQTT broker...");
-  if (client.connect("ESP32Client")) {
-    Serial.println("Connected!");
-    return true;
-  } else {
-    Serial.print("Failed. Error code: ");
-    Serial.println(client.state());
-    return false;
-  }
-}
+// AT+CMQTTSTART
+// AT+CMQTTACCQ=0,"LAB"
+// 
+// AT+CMQTTCONNECT=0,"tcp://test.mosquitto.org:1883",20,1
+// AT+CMQTTTOPIC=0,9     //     mqtt/test1
+// AT+CMQTTPAYLOAD=0,6
+// AT+CMQTTPUB=0,1,60
