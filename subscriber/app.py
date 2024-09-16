@@ -2,7 +2,7 @@ import paho.mqtt.client as mqtt
 import time
 
 # MQTT broker details
-broker_ip = '192.168.149.222'  # Replace with your MQTT broker IP
+broker_ip = 'broker.hivemq.com'  # Replace with your MQTT broker IP
 port = 1883  # Default MQTT port
 subscribe_topic = 'sensor/reading'  # Topic to subscribe to
 publish_topic = 'device/time_update'  # Topic to publish the time
@@ -39,7 +39,7 @@ client.loop_start()
 try:
     while True:
         # Get the current time as a string
-        current_time = str(10)  # Get current time as a string
+        current_time = str(5)  # Get current time as a string
         
         # Publish the current time to the new topic
         client.publish(publish_topic, current_time)
