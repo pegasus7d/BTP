@@ -1,4 +1,3 @@
-
 #define TINY_GSM_MODEM_SIM7600  
 #define SerialAT Serial1
 #define SerialMon Serial
@@ -6,16 +5,22 @@
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 
+#include <WiFi.h>
+#include <AsyncTCP.h>                // Added for Async WebServer support
+#include <ESPAsyncWebServer.h>       // Added the Async WebServer library
+
 #include <Adafruit_ADS1X15.h>
 
 #define RXD2 16    
 #define TXD2 17   
 #define powerPin 4
 
+bool check=false;
+
 int LED_BUILTIN = 2;
 int ledStatus = LOW;
 
-const char *broker         = "broker.hivemq.com"; // Using public HiveMQ broker
+const char *broker         = "test.mosquitto.org"; 
 const char *publishTopic   = "sensor/reading";    // Topic to publish messages
 const char *subscribeTopic = "device/time_update"; // Topic to subscribe to for receiving time
 
@@ -33,6 +38,8 @@ TinyGsmClient client(modem);
 PubSubClient mqtt(client);
 Adafruit_ADS1115 ads;
 
+AsyncWebServer server(80); 
+
 bool adsConnected = false;
 int16_t ch0 = 0;
 int16_t ch1 = 0;
@@ -40,6 +47,8 @@ int16_t ch2 = 0;
 
 unsigned long interval = 2000;  // Default to 2 seconds
 unsigned long previousMillis = 0;  // Store the last time a message was published
+unsigned long serverStartMillis = 0;
+const unsigned long serverTimeout = 60000*15;
 
 void setup() {
   Serial.begin(115200);
@@ -66,7 +75,7 @@ void setup() {
   Serial.println("Waiting for network...");
   if (!modem.waitForNetwork()) {
     Serial.println("Network connection failed.");
-    delay(10000);
+    // delay(10000);
     return;
   }
   Serial.println("Network connected.");
@@ -93,6 +102,10 @@ void setup() {
     Serial.println("Connected to MQTT broker.");
     mqtt.subscribe(subscribeTopic);
   }
+  startWebServer();  // Start the web server
+  serverStartMillis = millis();  // Record the time the server started
+ 
+
 }
 
 void loop() {
@@ -125,6 +138,11 @@ void loop() {
 
   
   }
+  // Stop the web server after 1 minute
+  if (currentMillis - serverStartMillis >= serverTimeout and check==false) {
+    stopWebServer();  // Shut down the web server
+  }
+  
 }
 
 bool connectToMQTT() {
@@ -156,4 +174,42 @@ void callback(char* topic, byte* payload, unsigned int length) {
       Serial.println(interval);
     }
   }
+  
+}
+
+void startWebServer() {
+  WiFi.softAP("ESP32_AP");
+  // Route to handle "/" page
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", "Welcome to ESP32 Async WebServer");
+  });
+
+  // Route to return ADS1115 readings
+  server.on("/readings", HTTP_GET, [](AsyncWebServerRequest *request){
+    // Return sensor readings as a JSON object
+    String jsonResponse = "{\"ch0\":" + String(ch0) + ", \"ch1\":" + String(ch1) + ", \"ch2\":" + String(ch2) + "}";
+    request->send(200, "application/json", jsonResponse);
+  });
+
+  // Start server
+  server.begin();  // New: Begin the async web server to listen for requests
+}
+
+void stopWebServer() {
+  server.end();  // Shut down the async web server
+  WiFi.softAPdisconnect(true);
+  check=true;
+  // Serial.println("Web server stopped after 30 seconds.");
+}
+
+
+String getSignalStrength() {
+  int signalQuality = modem.getSignalQuality();
+  //Serial.println(signalQuality);
+  return String(signalQuality);
 }
