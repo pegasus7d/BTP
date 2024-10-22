@@ -44,11 +44,12 @@ bool adsConnected = false;
 int16_t ch0 = 0;
 int16_t ch1 = 0;
 int16_t ch2 = 0;
+int16_t ch3 = 0;
 
 unsigned long interval = 2000;  // Default to 2 seconds
 unsigned long previousMillis = 0;  // Store the last time a message was published
 unsigned long serverStartMillis = 0;
-const unsigned long serverTimeout = 60000*15;
+const unsigned long serverTimeout = 60000*3;
 
 void setup() {
   Serial.begin(115200);
@@ -125,8 +126,9 @@ void loop() {
         ch0 = ads.readADC_SingleEnded(0);
         ch1 = ads.readADC_SingleEnded(1);
         ch2 = ads.readADC_SingleEnded(2);
+        ch3= ads.readADC_SingleEnded(3);
         Serial.print("ADS1115 Value: ");
-        Serial.println(String(ch0) + String(ch1) + String(ch2));
+        Serial.println("ch0 "+String(ch0)+" ch1 " + String(ch1)+" ch2 " + String(ch2)+" ch3 " + String(ch3));
         String message = String(ch0) + String(ch1) + String(ch2);
         mqtt.publish(publishTopic, message.c_str());
         
@@ -195,6 +197,32 @@ void startWebServer() {
     String jsonResponse = "{\"ch0\":" + String(ch0) + ", \"ch1\":" + String(ch1) + ", \"ch2\":" + String(ch2) + "}";
     request->send(200, "application/json", jsonResponse);
   });
+   server.on("/params", HTTP_GET, [](AsyncWebServerRequest *request) {
+  String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+  html += "<style>";
+  html += "body { background-color: #f0f0f0; }"; // light gray background
+  html += ".outer-container { background-color: #f0f0f0; padding: 20px; border: 1px solid #CCCCCC; border-radius: 10px; }";
+  html += ".inner-container { background-color: #ADD8E6; padding: 10px; margin-bottom: 10px; }";
+  html += ".inner-container span { color: #000000; font-size: 16px; }"; // black text
+  html += "@media only screen and (max-width: 600px) {";
+  html += "  .outer-container { padding: 10px; }";
+  html += "  .inner-container { padding: 5px; font-size: 14px; }";
+  html += "}";
+  html += "</style></head><body>";
+  html += "<div class='outer-container'>";
+  html += "<div class='inner-container'><h1>ESP32 Status</h1></div>";
+  html += "<div class='inner-container'><p><span>Network Status: " + String(modem.isNetworkConnected() ? "Connected" : "Disconnected") + "</span></p></div>";
+  html += "<div class='inner-container'><p><span>MQTT Status: " + String(mqtt.connected() ? "Connected" : "Disconnected") + "</span></p></div>";
+  html += "<div class='inner-container'><p><span>Signal Strength: " + getSignalStrength() + "</span></p></div>";
+  html += "<div class='inner-container'><p><span>ADS1115 Status: " + String(adsConnected ? "Connected" : "Disconnected") + "</span></p></div>";
+  html += "<div class='inner-container'><p><span>Channel1: " + String(ch0) + "</span></p></div>";
+  html += "<div class='inner-container'><p><span>Channel2: " + String(ch1) + "</span></p></div>";    
+  html += "<div class='inner-container'><p><span>Channel3: " + String(ch2) + "</span></p></div>";
+   html += "<div class='inner-container'><p><span>Channel4: " + String(ch3) + "</span></p></div>";
+  html += "</div>";
+  html += "</body></html>";
+  request->send(200, "text/html", html);
+});
 
   // Start server
   server.begin();  // New: Begin the async web server to listen for requests
@@ -206,7 +234,6 @@ void stopWebServer() {
   check=true;
   // Serial.println("Web server stopped after 30 seconds.");
 }
-
 
 String getSignalStrength() {
   int signalQuality = modem.getSignalQuality();
